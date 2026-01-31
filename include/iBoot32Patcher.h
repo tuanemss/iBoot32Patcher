@@ -59,7 +59,7 @@ struct iboot_interval {
 const static struct iboot_interval iboot_intervals[] = {
 	{320, 590, 2},
 	{594, 817, 3},
-	{889, 1072, 4},
+	{878, 1072, 4}, //added Phoenix Build
 	{1218, 1220, 5},
 	{1537, 1537, 6},
 	{1940, 1940, 7},
