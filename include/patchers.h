@@ -46,4 +46,5 @@ int patch_logo4(struct iboot_img* iboot_in);
 int patch_dualboot_ibss(struct iboot_img* iboot_in);
 int patch_dualboot_ibec(struct iboot_img* iboot_in);
 int patch_dualboot(struct iboot_img* iboot_in);
+int patch_nand(struct iboot_img* iboot_in, const char* new_id_str);
 #endif

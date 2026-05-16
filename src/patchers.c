@@ -1049,3 +1049,98 @@ int patch_dualboot(struct iboot_img* iboot_in) {
 
     return 1;
 }
+
+int patch_nand(struct iboot_img* iboot_in, const char* new_id_str) {
+    printf("%s: Entering...\n", __FUNCTION__);
+    
+    uint8_t old_id[6];
+    uint8_t new_id[6];
+    
+    if (strlen(new_id_str) < 12) {
+        printf("%s: New ID must be 12 hex characters (6 bytes)!\n", __FUNCTION__);
+        return 0;
+    }
+    
+    for (int i = 0; i < 6; i++) {
+        unsigned int val_new;
+        sscanf(new_id_str + i*2, "%02x", &val_new);
+        new_id[i] = (uint8_t)val_new;
+    }
+
+    // Discover old_id by searching for the geometry suffix
+    uint8_t geom_suffix[] = {
+        0x38, 0x10, 0x80, 0x00, 0x00, 0x20, 0xB4, 0x01, 
+        0x0C, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 
+        0x01, 0x00, 0x00, 0x00
+    };
+    
+    void* geom_suffix_loc = memmem(iboot_in->buf, iboot_in->len, geom_suffix, sizeof(geom_suffix));
+    if (!geom_suffix_loc) {
+        printf("%s: Error: Could not find NAND geometry entry to identify old ID.\n", __FUNCTION__);
+        return 0;
+    }
+    
+    /* The ID field (8 bytes) is immediately before the suffix */
+    uint8_t* old_id_ptr = (uint8_t*)geom_suffix_loc - 8;
+    memcpy(old_id, old_id_ptr, 6);
+    
+    printf("%s: Discovered old NAND ID: %02X%02X%02X%02X%02X%02X\n", __FUNCTION__, 
+           old_id[0], old_id[1], old_id[2], old_id[3], old_id[4], old_id[5]);
+    printf("%s: Patching to new NAND ID: %02X%02X%02X%02X%02X%02X\n", __FUNCTION__, 
+           new_id[0], new_id[1], new_id[2], new_id[3], new_id[4], new_id[5]);
+
+    /* Geometry Patch (8-byte ID field) */
+    uint8_t geom_find[] = {
+        old_id[0], old_id[1], old_id[2], old_id[3], old_id[4], old_id[5], 0x00, 0x00, 
+        0x38, 0x10, 0x80, 0x00, 0x00, 0x20, 0xB4, 0x01, 
+        0x0C, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 
+        0x01, 0x00, 0x00, 0x00
+    };
+    uint8_t geom_repl[] = {
+        new_id[0], new_id[1], new_id[2], new_id[3], new_id[4], new_id[5], 0x00, 0x00, 
+        0x38, 0x10, 0x80, 0x00, 0x00, 0x20, 0x80, 0x02, 
+        0x10, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 
+        0x01, 0x00, 0x00, 0x00
+    };
+    
+    // We already found it, so we can just copy
+    memcpy(old_id_ptr, geom_repl, sizeof(geom_repl));
+    printf("%s: Patched geometry entry at %p\n", __FUNCTION__, (void*)GET_IBOOT_FILE_OFFSET(iboot_in, old_id_ptr));
+
+    /* Timing Patch (6-byte ID field after 02 01) */
+    uint8_t time_find[] = {
+        0x1E, 0x0F, 0x0A, 0x1E, 0x0F, 0x0A, 0x19, 0x0F, 
+        0x02, 0x01, old_id[0], old_id[1], old_id[2], old_id[3], old_id[4], old_id[5]
+    };
+    uint8_t time_repl[] = {
+        0x19, 0x0C, 0x0A, 0x19, 0x0C, 0x0A, 0x14, 0x0F, 
+        0x02, 0x01, new_id[0], new_id[1], new_id[2], new_id[3], new_id[4], new_id[5]
+    };
+    
+    void* time_loc = memmem(iboot_in->buf, iboot_in->len, time_find, sizeof(time_find));
+    if (time_loc) {
+        printf("%s: Found timing entry at %p\n", __FUNCTION__, (void*)GET_IBOOT_FILE_OFFSET(iboot_in, time_loc));
+        memcpy(time_loc, time_repl, sizeof(time_repl));
+    } else {
+        printf("%s: Warning: Could not find timing entry.\n", __FUNCTION__);
+    }
+
+    /* Table Patch (6-byte ID field after 02 01) */
+    uint8_t table_find[] = { 0x02, 0x01, old_id[0], old_id[1], old_id[2], old_id[3], old_id[4], old_id[5] };
+    uint8_t table_repl[] = { 0x02, 0x01, new_id[0], new_id[1], new_id[2], new_id[3], new_id[4], new_id[5] };
+    
+    void* current_pos = iboot_in->buf;
+    int table_patches = 0;
+    while (current_pos < (void*)(iboot_in->buf + iboot_in->len)) {
+        current_pos = memmem(current_pos, (uint8_t*)iboot_in->buf + iboot_in->len - (uint8_t*)current_pos, table_find, sizeof(table_find));
+        if (!current_pos) break;
+        printf("%s: Found table entry at %p\n", __FUNCTION__, (void*)GET_IBOOT_FILE_OFFSET(iboot_in, current_pos));
+        memcpy(current_pos, table_repl, sizeof(table_repl));
+        current_pos = (uint8_t*)current_pos + sizeof(table_repl);
+        table_patches++;
+    }
+    printf("%s: Applied %d table patches.\n", __FUNCTION__, table_patches);
+
+    printf("%s: Leaving...\n", __FUNCTION__);
+    return 1;
+}

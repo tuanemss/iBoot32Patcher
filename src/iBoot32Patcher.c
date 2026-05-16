@@ -68,6 +68,7 @@ int main(int argc, char** argv) {
     char* custom_color = NULL;
     bool dualboot_patch = false;
     bool rsa_patch = false;
+    char* nand_new_id = NULL;
 	struct iboot_img iboot_in;
 	memset(&iboot_in, 0, sizeof(iboot_in));
 
@@ -92,6 +93,7 @@ int main(int argc, char** argv) {
         printf("\t--433\t\t\tApply enable jump to iBoot patch for iOS 4.3.3 or lower\n");
         printf("\t--dualboot\t\tApply default dualbooting patches for iOS 5 -> iOS 10\n");
         printf("\t--rsa\t\t\tApply signature check patches\n");
+        printf("\t--nand <id>\t\tPatch NAND geometry/timing (e.g. ECD7947A5443)\n");
 		return -1;
 	}
 
@@ -171,13 +173,17 @@ int main(int argc, char** argv) {
         if(HAS_ARG("--rsa", 0)) {
             rsa_patch = true;
         }
+
+        if(HAS_ARG("--nand", 1)) {
+            nand_new_id = (char*) argv[i+1];
+        }
 	}
     
     if(local_patch && remote_patch) {
         return -1;
     }
 
-    if (!rsa_patch && !debug_patch && !boot_partition_patch && !boot_ramdisk_patch && !setenv_patch && !ticket_patch && !custom_boot_args && !cmd_handler_str && !remote_patch && !local_patch && !env_boot_args && !kaslr_patch && !i433_patch && !logo_patch && !logo4_patch && !dualboot_patch) {
+    if (!rsa_patch && !debug_patch && !boot_partition_patch && !boot_ramdisk_patch && !setenv_patch && !ticket_patch && !custom_boot_args && !cmd_handler_str && !remote_patch && !local_patch && !env_boot_args && !kaslr_patch && !i433_patch && !logo_patch && !logo4_patch && !dualboot_patch && !nand_new_id) {
         printf("%s: Nothing to patch!\n", __FUNCTION__);
         return -1;
     }
@@ -386,8 +392,17 @@ int main(int argc, char** argv) {
 
     if(dualboot_patch) {
         ret = patch_dualboot(&iboot_in);
-    	if(!ret) {
+        if(!ret) {
             printf("%s: Error doing patch_dualboot()!\n", __FUNCTION__);
+            free(iboot_in.buf);
+            return -1;
+        }
+    }
+
+    if(nand_new_id) {
+        ret = patch_nand(&iboot_in, nand_new_id);
+        if(!ret) {
+            printf("%s: Error doing patch_nand()!\n", __FUNCTION__);
             free(iboot_in.buf);
             return -1;
         }
