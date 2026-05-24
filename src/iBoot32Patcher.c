@@ -93,7 +93,7 @@ int main(int argc, char** argv) {
         printf("\t--433\t\t\tApply enable jump to iBoot patch for iOS 4.3.3 or lower\n");
         printf("\t--dualboot\t\tApply default dualbooting patches for iOS 5 -> iOS 10\n");
         printf("\t--rsa\t\t\tApply signature check patches\n");
-        printf("\t--nand <id>\t\tPatch NAND geometry/timing (e.g. ECD7947A5443)\n");
+        printf("\t--nand <id>\t\tPatch NAND geometry/timing (e.g. ECD7947A5443) only iPhone4 cdma Phoenix Build\n");
 		return -1;
 	}
 
